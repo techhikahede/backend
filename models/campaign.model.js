@@ -1,5 +1,22 @@
 import mongoose from "mongoose";
 
+const ruleSchema = new mongoose.Schema({
+  field: {
+    type: String,
+    required: [true, "Field is required in targeting rule"],
+    trim: true,
+  },
+  operator: {
+    type: String,
+    required: [true, "Operator is required in targeting rule"],
+    enum: ["equals", "not_equals", "greater_than", "less_than", "contains", "not_contains", "in", "not_in"], // Extend as needed
+  },
+  value: {
+    type: mongoose.Schema.Types.Mixed,
+    required: [true, "Value is required in targeting rule"],
+  }
+}, { _id: false });
+
 const campaignSchema = new mongoose.Schema({
   campaignId: {
     type: String,
@@ -25,15 +42,24 @@ const campaignSchema = new mongoose.Schema({
   endDate: {
     type: Date,
     validate: {
-      validator: function(value) {
-        // endDate should be after startDate if provided
+      validator: function (value) {
         return !value || value > this.startDate;
       },
       message: "End date must be after start date",
     },
   },
+  targetingRules: {
+    type: [ruleSchema],
+    default: [],
+    validate: {
+      validator: function (rules) {
+        return Array.isArray(rules);
+      },
+      message: "Targeting rules must be an array",
+    }
+  },
   targetCustomers: [{
-    type: String, // Assuming your customerId is string like "CUST001"
+    type: String, // Reference by customer ID (like "CUST001")
     ref: "Customer",
   }],
   budget: {
@@ -46,8 +72,7 @@ const campaignSchema = new mongoose.Schema({
     default: 0,
     min: [0, "Spent amount cannot be negative"],
     validate: {
-      validator: function(value) {
-        // spent cannot exceed budget
+      validator: function (value) {
         return value <= this.budget;
       },
       message: "Spent amount cannot exceed budget",
@@ -76,10 +101,9 @@ const campaignSchema = new mongoose.Schema({
     }
   }],
 }, {
-  timestamps: true, // auto creates createdAt and updatedAt
+  timestamps: true, // Adds createdAt and updatedAt
 });
 
 const Campaign = mongoose.model("Campaign", campaignSchema);
 
 export default Campaign;
-
