@@ -4,6 +4,7 @@ import connectDB from "./config/db.js";
 
 import customerRoutes from "./routes/customer.route.js";
 import orderRoutes from "./routes/order.route.js";
+import campaignRoutes from "./routes/campaign.route.js";
 
 dotenv.config();
 
@@ -19,6 +20,7 @@ app.get("/", (req, res) => {
 
 app.use("/api/v1/customers", customerRoutes);
 app.use("/api/v1/orders", orderRoutes);
+app.use("/api/v1/campaigns", campaignRoutes);
 
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => {
