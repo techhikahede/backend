@@ -1,4 +1,6 @@
 import Campaign from "../models/campaign.model.js";
+import CampaignHistory from "../models/CAMPAIGNhISTORY.model.js";
+import CommunicationLog from "../models/communicationLog.model.js";
 import Customer from "../models/customer.model.js";
 import { generateSequence } from "../utils/generateSequence.js";
 
@@ -76,6 +78,7 @@ export const createCampaign = async (req, res) => {
       rules = [],
     } = req.body;
 
+    // Ensure there are targeting rules
     if (!rules.length) {
       return res.status(400).json({
         success: false,
@@ -83,13 +86,19 @@ export const createCampaign = async (req, res) => {
       });
     }
 
+    // Generate sequential campaign ID
     const campaignId = await generateSequence("campaign_seq");
 
+    // Convert targeting rules to MongoDB query filter
     const filter = buildMongoQueryFromRules(rules);
+
+    // Find customers matching the rules; only fetch customerId field
     const matchingCustomers = await Customer.find(filter, { customerId: 1 });
 
+    // Extract customer IDs
     const targetCustomers = matchingCustomers.map((c) => c.customerId);
 
+    // Create the campaign document
     const newCampaign = new Campaign({
       campaignId: `CAMP${campaignId.toString().padStart(3, "0")}`,
       name,
@@ -109,16 +118,49 @@ export const createCampaign = async (req, res) => {
 
     await newCampaign.save();
 
+    // Create the list of customers with delivery status
+    const customerStatusList = matchingCustomers.map(({ customerId }) => ({
+      customerId,
+      status: "delivered", // You can change this logic based on actual delivery status
+    }));
+
+
+
+    // Create a campaign history record linked to this campaign
+    const newCampaignHistory = new CampaignHistory({
+      campaign: newCampaign._id,
+      segmentRules: rules,
+      audienceSize: targetCustomers.length,
+      sent: 0,
+      failed: 0,
+      successRate: 0,
+      status: newCampaign.status || "planned",
+      customers: customerStatusList,
+    });
+
+    await newCampaignHistory.save();
+
+      // adding all the realted customer to ommunicatiobn log
+      const newCommunicationLog = new CommunicationLog({
+        campaignId: newCampaign._id,
+        customersStatus: customerStatusList,
+      });
+
+      await newCommunicationLog.save();
+
+    // Return both created campaign and history
     return res.status(201).json({
       success: true,
       message: "Campaign created successfully",
       campaign: newCampaign,
+      campaignHistory: newCampaignHistory,
     });
   } catch (error) {
     console.error("Create campaign error:", error);
     return res.status(500).json({
       success: false,
       message: "Failed to create campaign",
+      error: error.message,
     });
   }
 };
