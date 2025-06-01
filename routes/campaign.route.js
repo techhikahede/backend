@@ -6,12 +6,14 @@ import {
   getCampaignById,
   updateCampaign,
   deleteCampaign,
+  parseNaturalLanguageByGemini,
 } from "../controllers/campaign.controller.js";
 
 const router = express.Router();
 
 router.post("/create", createCampaign);
 router.post("/preview", previewCampaign);
+router.post("/aiModel", parseNaturalLanguageByGemini)
 router.get("/", getAllCampaigns);
 router.get("/:id", getCampaignById);
 router.put("/:id", updateCampaign);
