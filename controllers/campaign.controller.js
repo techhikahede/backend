@@ -1,8 +1,12 @@
+import { CountTokensResponse } from "@google/genai";
+import { chatSession } from "../config/GeminiModal.js";
+import { extractJsonArrayFromText } from "../helper/ParseAIResponse.js";
 import Campaign from "../models/campaign.model.js";
 import CampaignHistory from "../models/CAMPAIGNhISTORY.model.js";
 import CommunicationLog from "../models/communicationLog.model.js";
 import Customer from "../models/customer.model.js";
 import { generateSequence } from "../utils/generateSequence.js";
+
 
 // Helper: Build MongoDB filter from rules
 const buildMongoQueryFromRules = (rules = []) => {
@@ -251,3 +255,75 @@ export const deleteCampaign = async (req, res) => {
   }
 };
 
+// from the prompt given, generate the filters using Gemini API
+export const parseNaturalLanguageByGemini = async (req, res) => {
+
+  const { userInput } = req.body;
+
+  if (!userInput) {
+    return res.status(400).json({
+      success: false,
+      message: "Missing userInput in request body",
+    });
+  }
+
+  const segmentRulePrompt = `
+      You are a helpful assistant that converts user instructions in natural language into an array of segment rules to filter customer data.
+
+      Each rule should follow this format:
+      {
+        "field": string,         // the name of the field to filter (e.g. "age", "gender", "city", "totalSpent")
+        "operator": string,      // one of: "equals", "notEquals", "greaterThan", "lessThan", "includes", "in", "between"
+        "value": any             // the value or range to compare
+      }
+
+      Supported fields include: "age", "gender", "city", "state", "totalSpent", "visits", "lastPurchaseDate", "email", "phone"
+
+      Supported operators:
+      - "equals" (e.g., gender equals female)
+      - "notEquals" (e.g., city notEquals Mumbai)
+      - "greaterThan" / "lessThan" (e.g., age greaterThan 25)
+      - "in" (e.g., city in ["Delhi", "Mumbai"])
+      - "includes" (for arrays or strings)
+      - "between" (for ranges, e.g., age between 20 and 30)
+
+      input : ${userInput}
+      `;
+
+
+  try {
+    const result = await chatSession.sendMessage({
+      message:segmentRulePrompt ,
+    });
+
+    if (!result) {
+      return res
+        .status(404)
+        .json({ success: false, message: "prompt not found" });
+    }
+    //extract the rawtext from gemini response
+    const rawText = result?.candidates?.[0]?.content?.parts?.[0]?.text || "";
+
+    //parse the json in the rawtest
+    const segmentRules = extractJsonArrayFromText(rawText);
+
+    if (!segmentRules) {
+      return res.status(400).json({
+        success: false,
+        message: "Could not extract valid segment rules from AI response.",
+      });
+    }
+
+    return res.status(200).json({
+      success: true,
+      message: "Segment Rules recognized successfully",
+      rules: segmentRules,
+    });
+  } catch (error) {
+    console.error("error while generating", error);
+    return res.status(500).json({
+      success: false,
+      message: "Error while generating",
+    });
+  }
+};
